@@ -1,10 +1,12 @@
 import time
 import RPi.GPIO as GPIO
 
-# Thiết lập GPIO cho servo
+# Thiết lập GPIO cho servo và đèn LED
 servo_pin = 17  # GPIO pin kết nối với servo
+led_pin = 27    # GPIO pin kết nối với LED
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(servo_pin, GPIO.OUT)
+GPIO.setup(led_pin, GPIO.OUT)
 
 # Khởi tạo PWM cho servo
 servo = GPIO.PWM(servo_pin, 50)  # Tần số 50Hz
@@ -34,8 +36,19 @@ def adjust_servo_to_center(x, y, w, h, frame_width=640, frame_height=480):
     angle_x = 90 + (delta_x / frame_width) * 90  # Xoay servo từ 0 đến 180 độ
     angle_y = 90 - (delta_y / frame_height) * 90  # Xoay servo từ 0 đến 180 độ
 
-    set_servo_angle(angle_x)
-    set_servo_angle(angle_y)
+    if delta_x > 10:  # Nếu detect box nằm bên phải quá xa
+        print("Move to right")
+        set_servo_angle(angle_x)
+    elif delta_x < -10:  # Nếu detect box nằm bên trái quá xa
+        print("Move to left")
+        set_servo_angle(angle_x)
+
+    # Khi detect box đã về giữa khung hình
+    if abs(delta_x) <= 10 and abs(delta_y) <= 10:
+        GPIO.output(led_pin, True)  # Bật LED khi detect box đã ở giữa
+        print("Center")
+    else:
+        GPIO.output(led_pin, False)  # Tắt LED nếu box chưa ở giữa
 
 # Hàm đọc giá trị từ file toado.txt
 def read_toado_file():
