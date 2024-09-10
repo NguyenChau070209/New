@@ -1,0 +1,77 @@
+import time
+import RPi.GPIO as GPIO
+
+# Thiết lập GPIO cho servo
+servo_pin = 17  # GPIO pin kết nối với servo
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(servo_pin, GPIO.OUT)
+
+# Khởi tạo PWM cho servo
+servo = GPIO.PWM(servo_pin, 50)  # Tần số 50Hz
+servo.start(0)
+
+# Hàm để di chuyển servo đến góc cụ thể
+def set_servo_angle(angle):
+    duty_cycle = 2 + (angle / 18)  # Công thức chuyển đổi góc sang duty cycle
+    GPIO.output(servo_pin, True)
+    servo.ChangeDutyCycle(duty_cycle)
+    time.sleep(0.5)
+    GPIO.output(servo_pin, False)
+    servo.ChangeDutyCycle(0)
+
+# Hàm điều chỉnh servo theo tọa độ detect box
+def adjust_servo_to_center(x, y, w, h, frame_width=640, frame_height=480):
+    box_center_x = x + w / 2
+    box_center_y = y + h / 2
+    frame_center_x = frame_width / 2
+    frame_center_y = frame_height / 2
+    
+    # Tính toán sự chênh lệch giữa trung tâm của detect box và trung tâm khung hình
+    delta_x = box_center_x - frame_center_x
+    delta_y = box_center_y - frame_center_y
+    
+    # Điều chỉnh servo theo trục x và y (giả sử bạn có 2 servo: một cho X và một cho Y)
+    angle_x = 90 + (delta_x / frame_width) * 90  # Xoay servo từ 0 đến 180 độ
+    angle_y = 90 - (delta_y / frame_height) * 90  # Xoay servo từ 0 đến 180 độ
+
+    set_servo_angle(angle_x)
+    set_servo_angle(angle_y)
+
+# Hàm đọc giá trị từ file toado.txt
+def read_toado_file():
+    try:
+        with open("/home/edabk/tflite-custom-object-bookworm-main/toado.txt", "r") as file:
+            lines = file.readlines()
+            status = int(lines[0].strip())
+            if status == 1 and len(lines) > 1:
+                # Đọc tọa độ x, y, w, h
+                x, y, w, h = map(int, lines[1].strip().split(', '))
+                return status, x, y, w, h
+            return status, None, None, None, None
+    except Exception as e:
+        print(f"Error reading file: {e}")
+        return 0, None, None, None, None
+
+# Vòng lặp chính để kiểm tra file và điều khiển servo
+try:
+    while True:
+        status, x, y, w, h = read_toado_file()
+
+        if status == 0:
+            # Không có phát hiện lửa -> xoay servo từ 0 đến 180 độ
+            for angle in range(0, 181, 10):
+                set_servo_angle(angle)
+            for angle in range(180, -1, -10):
+                set_servo_angle(angle)
+        elif status == 1 and x is not None:
+            # Phát hiện lửa -> điều chỉnh servo theo tọa độ detect box
+            adjust_servo_to_center(x, y, w, h)
+
+        time.sleep(1)  # Chờ một giây trước khi kiểm tra lại
+
+except KeyboardInterrupt:
+    print("Stopping program")
+
+finally:
+    servo.stop()
+    GPIO.cleanup()
