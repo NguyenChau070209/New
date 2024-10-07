@@ -22,17 +22,19 @@ picam2.preview_configuration.align()
 picam2.configure("preview")
 picam2.start()
 
-# Servo setup for X and Y axes
+# Servo setup for X and Y axes using gpiozero
 servo_x = Servo(18)  # GPIO pin for X-axis servo
 servo_y = Servo(19)  # GPIO pin for Y-axis servo
 
-# LED setup
+# LED setup using gpiozero
 led = LED(15)  # GPIO pin for LED
 led.off()
 
 # Variables to track servo angle direction for both servos
-servo_angle_x = 0  # Servo values range from -1 to 1 in gpiozero (with 0 as middle position)
-servo_angle_y = 0
+servo_angle_x = 90  # Start at middle position
+servo_angle_y = 90
+servo_direction_x = 1  # 1 for increasing, -1 for decreasing
+servo_direction_y = 1
 
 # Function to display FPS
 def show_fps(image):
@@ -53,9 +55,22 @@ def show_fps(image):
 
 # Function to set servo angle for both X and Y axes
 def set_angle(servo, angle):
-    # Convert angle (0-180) to the range for gpiozero (-1 to 1)
-    servo.value = angle / 90 - 1  # Scale and shift to match -1 to 1 range
+    servo.value = (angle / 90) - 1  # Convert 0-180 degree range to -1 to 1 for gpiozero servos
     sleep(0.1)
+
+# Move servo continuously between 0 and 180 degrees
+def move_servo_continuous():
+    global servo_angle_x, servo_direction_x, servo_angle_y, servo_direction_y
+    set_angle(servo_x, servo_angle_x)
+    set_angle(servo_y, servo_angle_y)
+    
+    servo_angle_x += 10 * servo_direction_x
+    if servo_angle_x >= 180 or servo_angle_x <= 0:
+        servo_direction_x *= -1
+
+    servo_angle_y += 10 * servo_direction_y
+    if servo_angle_y >= 180 or servo_angle_y <= 0:
+        servo_direction_y *= -1
 
 # Move servos based on detection box position
 def move_servo_to_center(bbox_center_x, bbox_center_y, frame_center_x, frame_center_y):
@@ -64,11 +79,11 @@ def move_servo_to_center(bbox_center_x, bbox_center_y, frame_center_x, frame_cen
     # X-axis control
     if abs(bbox_center_x - frame_center_x) > tolerance:
         if bbox_center_x < frame_center_x:
-            new_angle_x = max(servo_angle_x - 5, -90)  # Prevent angle from going below -90
+            new_angle_x = max(servo_angle_x - 5, 0)  # Prevent angle from going below 0
             set_angle(servo_x, new_angle_x)
             print("move to left")
         else:
-            new_angle_x = min(servo_angle_x + 5, 90)  # Prevent angle from going above 90
+            new_angle_x = min(servo_angle_x + 5, 180)  # Prevent angle from going above 180
             set_angle(servo_x, new_angle_x)
             print("move to right")
         global servo_angle_x
@@ -77,11 +92,11 @@ def move_servo_to_center(bbox_center_x, bbox_center_y, frame_center_x, frame_cen
     # Y-axis control
     if abs(bbox_center_y - frame_center_y) > tolerance:
         if bbox_center_y < frame_center_y:
-            new_angle_y = min(servo_angle_y + 5, 90)  # Prevent angle from going above 90
+            new_angle_y = min(servo_angle_y + 5, 180)  # Prevent angle from going above 180
             set_angle(servo_y, new_angle_y)
             print("move up")
         else:
-            new_angle_y = max(servo_angle_y - 5, -90)  # Prevent angle from going below -90
+            new_angle_y = max(servo_angle_y - 5, 0)  # Prevent angle from going below 0
             set_angle(servo_y, new_angle_y)
             print("move down")
         global servo_angle_y
@@ -120,7 +135,7 @@ def run(model: str, max_results: int, score_threshold: float,
 
         # State 1: Servo moves continuously until 2 objects are detected
         if detection_count < 2:
-            # Consider implementing move_servo_continuous() if required
+            move_servo_continuous()
             pass
         else:
             # State 2: Adjust servo based on object detection
