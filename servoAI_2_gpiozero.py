@@ -60,7 +60,7 @@ def set_angle(servo, angle):
 
 # Move servo continuously between 0 and 180 degrees
 def move_servo_continuous():
-    global servo_angle_x, servo_direction_x, servo_angle_y, servo_direction_y
+    global servo_angle_x, servo_direction_x, servo_angle_y, servo_direction_y  # Khai báo biến global
     set_angle(servo_x, servo_angle_x)
     set_angle(servo_y, servo_angle_y)
     
@@ -74,6 +74,7 @@ def move_servo_continuous():
 
 # Move servos based on detection box position
 def move_servo_to_center(bbox_center_x, bbox_center_y, frame_center_x, frame_center_y):
+    global servo_angle_x, servo_angle_y  # Khai báo biến global
     tolerance = 30  # Adjust this value if needed
 
     # X-axis control
@@ -86,7 +87,6 @@ def move_servo_to_center(bbox_center_x, bbox_center_y, frame_center_x, frame_cen
             new_angle_x = min(servo_angle_x + 5, 180)  # Prevent angle from going above 180
             set_angle(servo_x, new_angle_x)
             print("move to right")
-        global servo_angle_x
         servo_angle_x = new_angle_x
     
     # Y-axis control
@@ -99,7 +99,6 @@ def move_servo_to_center(bbox_center_x, bbox_center_y, frame_center_x, frame_cen
             new_angle_y = max(servo_angle_y - 5, 0)  # Prevent angle from going below 0
             set_angle(servo_y, new_angle_y)
             print("move down")
-        global servo_angle_y
         servo_angle_y = new_angle_y
 
 # Run function with two servo states
