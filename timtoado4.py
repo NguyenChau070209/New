@@ -1,6 +1,7 @@
 import argparse
 import sys
 import time
+import threading
 
 import cv2
 import mediapipe as mp
@@ -21,20 +22,36 @@ picam2.preview_configuration.align()
 picam2.configure("preview")
 picam2.start()
 
+detection_results = []  # Danh sách chứa kết quả phát hiện
+lock = threading.Lock()  # Khóa để bảo vệ truy cập đến danh sách
+
+def save_results_to_file():
+    """Hàm để ghi kết quả vào file."""
+    while True:
+        time.sleep(2)  # Ghi file mỗi 2 giây (hoặc khoảng thời gian bạn muốn)
+        with lock:
+            file_path = "/home/xuanv/myenv/tflite-custom-object-bookworm-main/toado.txt"
+            with open(file_path, "w") as file:
+                if not detection_results:
+                    file.write("0\n")  # Không có phát hiện
+                else:
+                    file.write("1\n")  # Có phát hiện
+                    for result in detection_results:
+                        for detection in result.detections:
+                            bbox = detection.bounding_box
+                            x = bbox.origin_x
+                            y = bbox.origin_y
+                            w = bbox.width
+                            h = bbox.height
+                            file.write(f"{x}, {y}, {w}, {h}\n")  # Ghi tọa độ
+
 def run(model: str, max_results: int, score_threshold: float, 
         camera_id: int, width: int, height: int) -> None:
-    """Continuously run inference on images acquired from the camera.
+    """Continuously run inference on images acquired from the camera."""
 
-    Args:
-      model: Name of the TFLite object detection model.
-      max_results: Max number of detection results.
-      score_threshold: The score threshold of detection results.
-      camera_id: The camera id to be passed to OpenCV.
-      width: The width of the frame captured from the camera.
-      height: The height of the frame captured from the camera.
-    """
+    global detection_results  # Để truy cập danh sách từ hàm save_results_to_file
 
-    # Visualization parameters
+    # Các tham số trực quan hóa
     row_size = 50  # pixels
     left_margin = 24  # pixels
     text_color = (0, 0, 0)  # black
@@ -43,37 +60,20 @@ def run(model: str, max_results: int, score_threshold: float,
     fps_avg_frame_count = 10
 
     detection_frame = None
-    detection_result_list = []
 
     def save_result(result: vision.ObjectDetectorResult, unused_output_image: mp.Image, timestamp_ms: int):
         global FPS, COUNTER, START_TIME
 
-        # Calculate the FPS
+        # Tính FPS
         if COUNTER % fps_avg_frame_count == 0:
             FPS = fps_avg_frame_count / (time.time() - START_TIME)
             START_TIME = time.time()
 
-        # Ghi tọa độ vào file toado.txt trong thư mục /home/xuanv/myenv/tflite-custom-object-bookworm-main
-        file_path = "/home/xuanv/myenv/tflite-custom-object-bookworm-main/toado.txt"
-        with open(file_path, "a") as file:
-            if not result.detections:
-                # Nếu không có detect box, ghi số 0
-                file.write("0\n")
-            else:
-                # Nếu có phát hiện lửa, ghi số 1 và tọa độ detect box
-                file.write("1\n")
-                for detection in result.detections:
-                    bbox = detection.bounding_box
-                    x = bbox.origin_x
-                    y = bbox.origin_y
-                    w = bbox.width
-                    h = bbox.height
-                    file.write(f"{x}, {y}, {w}, {h}\n")  # Ghi tọa độ vào dòng thứ hai
-
-        detection_result_list.append(result)
+        with lock:
+            detection_results.append(result)  # Thêm kết quả vào danh sách
         COUNTER += 1
 
-    # Initialize the object detection model
+    # Khởi tạo mô hình phát hiện đối tượng
     base_options = python.BaseOptions(model_asset_path=model)
     options = vision.ObjectDetectorOptions(base_options=base_options,
                                            running_mode=vision.RunningMode.LIVE_STREAM,
@@ -81,35 +81,37 @@ def run(model: str, max_results: int, score_threshold: float,
                                            result_callback=save_result)
     detector = vision.ObjectDetector.create_from_options(options)
 
-    # Continuously capture images from the camera and run inference
+    # Bắt đầu luồng ghi file
+    threading.Thread(target=save_results_to_file, daemon=True).start()
+
+    # Liên tục chụp hình từ camera và chạy phát hiện
     while True:
         im = picam2.capture_array()
         image = cv2.resize(im, (640, 480))
         image = cv2.flip(image, -1)
 
-        # Convert the image from BGR to RGB as required by the TFLite model.
+        # Chuyển đổi hình ảnh từ BGR sang RGB
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_image)
 
-        # Run object detection using the model.
+        # Chạy phát hiện đối tượng
         detector.detect_async(mp_image, time.time_ns() // 1_000_000)
 
-        # Show the FPS
+        # Hiển thị FPS
         fps_text = 'FPS = {:.1f}'.format(FPS)
         text_location = (left_margin, row_size)
         current_frame = image
         cv2.putText(current_frame, fps_text, text_location, cv2.FONT_HERSHEY_DUPLEX,
                     font_size, text_color, font_thickness, cv2.LINE_AA)
 
-        if detection_result_list:
-            current_frame = visualize(current_frame, detection_result_list[0])
+        if detection_results:
+            current_frame = visualize(current_frame, detection_results[-1])  # Sử dụng kết quả mới nhất
             detection_frame = current_frame
-            detection_result_list.clear()
 
         if detection_frame is not None:
             cv2.imshow('object_detection', detection_frame)
 
-        # Stop the program if the ESC key is pressed.
+        # Dừng chương trình nếu phím ESC được nhấn.
         if cv2.waitKey(1) == 27:
             break
 
