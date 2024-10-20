@@ -1,10 +1,13 @@
 import argparse
 import sys
 import time
+
 import cv2
 import mediapipe as mp
+
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+
 from utils import visualize
 from picamera2 import Picamera2
 
@@ -50,9 +53,9 @@ def run(model: str, max_results: int, score_threshold: float,
             FPS = fps_avg_frame_count / (time.time() - START_TIME)
             START_TIME = time.time()
 
-        # Ghi tọa độ vào file toado.txt trong thư mục /home/edabk/tflite-custom-object-bookworm-main
-        file_path = "/home/edabk/tflite-custom-object-bookworm-main/toado.txt"
-        with open(file_path, "w") as file:
+        # Ghi tọa độ vào file toado.txt trong thư mục /home/xuanv/myenv/tflite-custom-object-bookworm-main
+        file_path = "/home/xuanv/myenv/tflite-custom-object-bookworm-main/toado.txt"
+        with open(file_path, "a") as file:
             if not result.detections:
                 # Nếu không có detect box, ghi số 0
                 file.write("0\n")
@@ -65,7 +68,6 @@ def run(model: str, max_results: int, score_threshold: float,
                     y = bbox.origin_y
                     w = bbox.width
                     h = bbox.height
-                    # Ghi tọa độ x, y, w, h theo thời gian thực
                     file.write(f"{x}, {y}, {w}, {h}\n")  # Ghi tọa độ vào dòng thứ hai
 
         detection_result_list.append(result)
